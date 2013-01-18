@@ -185,21 +185,22 @@ if __name__ == '__main__':
     template = os.path.join(os.path.dirname(sys.argv[0]), 'template.html')
     fullpath = os.path.join(options.htmldir, options.filename)
 
-    tools = []
-    crates = []
-    scout = []
-    soldier = []
-    pyro = []
-    demo = []
-    heavy = []
-    engi = []
-    medic = []
-    sniper = []
-    spy = []
-    allClass = []
+    
 
 
     while True:
+        tools = []
+        crates = []
+        scout = []
+        soldier = []
+        pyro = []
+        demo = []
+        heavy = []
+        engi = []
+        medic = []
+        sniper = []
+        spy = []
+        allClass = []
         with codecs.open(fullpath, 'w', 'utf-8') as f:
             content = ''
             with open(template) as main:
