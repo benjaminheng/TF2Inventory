@@ -189,74 +189,77 @@ if __name__ == '__main__':
 
 
     while True:
-        tools = []
-        crates = []
-        scout = []
-        soldier = []
-        pyro = []
-        demo = []
-        heavy = []
-        engi = []
-        medic = []
-        sniper = []
-        spy = []
-        allClass = []
-        with codecs.open(fullpath, 'w', 'utf-8') as f:
-            content = ''
-            with open(template) as main:
-                content = main.read()
+        try:
+            tools = []
+            crates = []
+            scout = []
+            soldier = []
+            pyro = []
+            demo = []
+            heavy = []
+            engi = []
+            medic = []
+            sniper = []
+            spy = []
+            allClass = []
+            with codecs.open(fullpath, 'w', 'utf-8') as f:
+                content = ''
+                with open(template) as main:
+                    content = main.read()
 
-            for steamId in options.accounts:
-                try:
-                    backpack = steam.tf2.backpack(steamId)
-                    for i in backpack:
-                        Item(i, steamId)
-                except:
-                    pass
+                for steamId in options.accounts:
+                    try:
+                        backpack = steam.tf2.backpack(steamId)
+                        for i in backpack:
+                            Item(i, steamId)
+                    except:
+                        pass
 
-            
-            ############################
-            # Begin table population
+                
+                ############################
+                # Begin table population
 
-            # crates
-            content = sort_and_generate_rows('Crates', crates, content)
-            # tools
-            content = sort_and_generate_rows('Tools', tools, content)
+                # crates
+                content = sort_and_generate_rows('Crates', crates, content)
+                # tools
+                content = sort_and_generate_rows('Tools', tools, content)
 
-            # all classes
-            content = sort_and_generate_rows('All Classes', allClass, content)
-            
-            # scout
-            content = sort_and_generate_rows('Scout', scout, content)
+                # all classes
+                content = sort_and_generate_rows('All Classes', allClass, content)
+                
+                # scout
+                content = sort_and_generate_rows('Scout', scout, content)
 
-            # Soldier
-            content = sort_and_generate_rows('Soldier', soldier, content)
+                # Soldier
+                content = sort_and_generate_rows('Soldier', soldier, content)
 
-            # Pyro
-            content = sort_and_generate_rows('Pyro', pyro, content)
+                # Pyro
+                content = sort_and_generate_rows('Pyro', pyro, content)
 
-            # Demo
-            content = sort_and_generate_rows('Demoman', demo, content)
+                # Demo
+                content = sort_and_generate_rows('Demoman', demo, content)
 
-            # Heavy
-            content = sort_and_generate_rows('Heavy', heavy, content)
-            
-            # Engi
-            content = sort_and_generate_rows('Engineer', engi, content)
+                # Heavy
+                content = sort_and_generate_rows('Heavy', heavy, content)
+                
+                # Engi
+                content = sort_and_generate_rows('Engineer', engi, content)
 
-            # Medic
-            content = sort_and_generate_rows('Medic', medic, content)
+                # Medic
+                content = sort_and_generate_rows('Medic', medic, content)
 
-            # Sniper
-            content = sort_and_generate_rows('Sniper', sniper, content)
+                # Sniper
+                content = sort_and_generate_rows('Sniper', sniper, content)
 
-            # Spy
-            content = sort_and_generate_rows('Spy', spy, content)
+                # Spy
+                content = sort_and_generate_rows('Spy', spy, content)
 
-            # End table population
-            ###########################
-            
-            f.write(content)
-        print 'Generated.'
+                # End table population
+                ###########################
+                
+                f.write(content)
+            print 'Generated.'
+        except:
+            pass
         time.sleep(60*options.pollMinutes)
 
