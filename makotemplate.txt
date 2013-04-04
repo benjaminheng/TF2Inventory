@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link href="css/tf2inventory.css" rel="stylesheet" type="text/css" />
+        <script src="js/jquery-1.9.1.min.js" type="text/javascript"></script>
+        <script src="js/footable-0.1.js" type="text/javascript"></script>
+        <script src="js/footable.filter.js" type="text/javascript"></script>
+        <script type="text/javascript">
+            $(document).ready(function() {
+                $('table').footable();
+
+                $(window).scroll(function() {
+                    if($(this).scrollTop() != 0) {
+                        $('#toTop').fadeIn();	
+                    } else {
+                        $('#toTop').fadeOut();
+                    }
+                });
+                 
+                $('#toTop').click(function() {
+                    $('body,html').animate({scrollTop:0},400);
+                });	
+                            
+            });
+        </script>
+            
+    </head>
+    <body>
+        <div id="item-table">
+            <div id="filterdiv"><input id="filter" type="text" placeholder="Filter Items" /></div>
+            <table class="footable" data-filter="#filter">
+                <thead>
+                    <tr>
+                        <th data-sort-ignore="true" data-class="expand">Type</th>
+                        <th data-sort-ignore="true">Quality</th>
+                        <th data-sort-ignore="true">Name</th>
+                        <th data-hide="all" data-sort-ignore="true"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                % for row in hats:
+                    ${makerow(row)}
+                % endfor
+                % for row in miscs:
+                    ${makerow(row)}
+                % endfor
+                % for row in weapons:
+                    ${makerow(row)}
+                % endfor
+                % for row in crates:
+                    ${makerow(row)}
+                % endfor
+                % for row in tools:
+                    ${makerow(row)}
+                % endfor
+                % for row in metal:
+                    ${makerow(row)}
+                % endfor
+                </tbody>
+            </table>
+
+            <div id="toTop">^ Back to Top</div>
+        </div>
+    </body>
+</html>
+
+
+<%def name="makerow(row)">
+<% 
+    qltyClass = row[1].lower()
+%>    
+<tr class="${qltyClass}">
+        <td>${row[3].capitalize()}</td>
+        <td>${row[1]}</td>
+        <td>${row[2]}</td>
+        <td>
+            <div class="itemimagediv"><img class="itemimage" src="${row[5]}" /></div>
+            <div class="itemaccounts">
+                % for i in row[6]:
+                    <span class='accountcell'>${i}</span>
+                % endfor
+            </div>
+        </td>
+    </tr>
+</%def>

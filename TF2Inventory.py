@@ -1,63 +1,74 @@
 #!/usr/bin/python
 
+import sqlite3
 import steamodd as steam
-import os, sys
-import codecs
 import ConfigParser
+import codecs
+import os, sys
 import time
+from mako.template import Template
+
+class Options:
+    def __init__(self):
+        self.conf = ConfigParser.ConfigParser()
+        self.accounts = []
+        self.apiKey = ''
+        self.pollMinutes = 10
+        self.htmldir = ''
+        self.filename = ''
+        self.get_config_options()
+
+    def get_config_options(self):
+        try:
+            self.conf.read(os.path.join(os.path.dirname(sys.argv[0]), 'config.ini'))
+            self.accounts = self.conf.get('General', 'accounts').split(',')
+            self.apiKey = self.conf.get('General', 'api_key')
+            self.pollMinutes = int(self.conf.get('General', 'poll_minutes'))
+            self.htmldir = self.conf.get('General', 'html_dir')
+            self.filename = self.conf.get('General', 'file_name')
+        except Exception as e:
+            print 'Options Error:', e
+            return
+
+class Backpack():
+    def __init__(self, bp, account):
+        self.bp = bp
+        self.account = account
+        self.counts = {}
+        self.db = DB('items.db')
+        accitems = self.db.get_account_items_steamids(account)
+
+        bpitems = []
+        try:
+            for i in bp:
+                item = Item(i, self.account)
+                if item.id not in accitems:
+                    if not self.db.item_exists(item):
+                        self.db.insert_to_item_and_account(item, account)
+                    else:
+                        self.db.insert_to_account(item, account)
+                bpitems.append(item.id)
+            for itemid in accitems:
+                if itemid not in bpitems:
+                    self.db.remove_from_account_by_steamitemid(itemid)
+                    # remove from item if no accounts associated
+                    if not self.db.get_accounts_by_itemid(itemid):
+                        self.db.remove_from_item_by_id(itemid)
+
+            self.db.close()
+        except Exception as e:
+            print 'backpack error: ', e
+
 
 class Item():
     def __init__(self, i, account):
         self.name = i.get_name()
         self.quality = i.get_quality()['prettystr']
         self.material = self.get_material(i)
-        self.count = {account: 1}
+        self.classes = ','.join(j for j in i.get_equipable_classes())
+        self.name2 = '%s %s' % (self.quality, self.name)
         self.image = i.get_image(i.ITEM_IMAGE_SMALL)
-        countname = '%s %s' % (self.quality, self.name)
-
-        self.add_to_list(i, account)
-
-    def add(self, list_, account):
-        for index, item in enumerate(list_):
-            if item.name == self.name and item.quality == self.quality:
-                if account in item.count.keys():
-                    self.count[account] = item.count[account] + 1
-                self.count = dict(item.count.items() + self.count.items())
-                list_[index] = self
-                break
-        else:
-            list_.append(self)
-
-    def add_to_list(self, i, account):
-        classes = i.get_equipable_classes()
-
-        if len(classes) == 9:
-            self.add(allClass, account)
-        elif len(classes) == 0:
-            #filter to tools and crates
-            if i.get_craft_material_type() == 'supply_crate':
-                self.add(crates, account)
-            else:
-                self.add(tools, account)
-        else:
-            if "Scout" in classes:
-                self.add(scout, account)
-            if "Soldier" in classes:
-                self.add(soldier, account)
-            if "Pyro" in classes:
-                self.add(pyro, account)
-            if "Demoman" in classes:
-                self.add(demo, account)
-            if "Heavy" in classes:
-                self.add(heavy, account)
-            if "Engineer" in classes:
-                self.add(engi, account)
-            if "Medic" in classes:
-                self.add(medic, account)
-            if "Sniper" in classes:
-                self.add(sniper, account)
-            if "Spy" in classes:
-                self.add(spy, account)
+        self.id = i.get_id()
 
     def get_material(self, i):
         material = i.get_craft_material_type()
@@ -96,170 +107,125 @@ class Item():
                 material = 'tool'
         return material
 
-    def get_nice_count(self):
-        tmp = 'Total: %s'
-        total = 0
-        for i in self.count:
-            total = total + self.count[i]
-            tmp = tmp + '<br/>%s: %s' % (i, self.count[i])
-        tmp = tmp % total
-        return tmp
+    def __repr__(self):
+        s = u'%s %s' % (self.quality, self.name)
+        return s.encode('utf-8')
 
 
-class Options:
-    def __init__(self):
-        self.conf = ConfigParser.ConfigParser()
-        self.accounts = []
-        self.apiKey = ''
-        self.pollMinutes = 10
-        self.htmldir = ''
-        self.filename = ''
-        self.get_config_options()
+class DB():
+    def __init__(self, db):
+        self.db = db
+        self.conn = sqlite3.connect(self.db)
+        self.c = self.conn.cursor()
 
-    def get_config_options(self):
-        try:
-            self.conf.read(os.path.join(os.path.dirname(sys.argv[0]), 'config.ini'))
-            self.accounts = self.conf.get('General', 'accounts').split(',')
-            self.apiKey = self.conf.get('General', 'api_key')
-            self.pollMinutes = int(self.conf.get('General', 'poll_minutes'))
-            self.htmldir = self.conf.get('General', 'html_dir')
-            self.filename = self.conf.get('General', 'file_name')
-        except Exception as e:
-            print 'Options Error:', e
-            return
+    def initialize_db(self):
+        self.c.execute('drop table if exists item')
+        self.c.execute('''create table item (id integer primary key, quality text, name text, type text, class text, image text)''')
+        self.c.execute('drop table if exists account')
+        self.c.execute('''create table account (id integer primary key, account text, itemId integer, steamItemId)''')
+        self.conn.commit()
 
-def get_qualities(list_):
-    qualities = ['unusual', 'strange', 'vintage', 'genuine', 'haunted'] 
-    unusual = [i for i in list_ if i.quality.lower() == qualities[0]]
-    strange = [i for i in list_ if i.quality.lower() == qualities[1]]
-    vintage = [i for i in list_ if i.quality.lower() == qualities[2]]
-    genuine = [i for i in list_ if i.quality.lower() == qualities[3]]
-    haunted = [i for i in list_ if i.quality.lower() == qualities[4]]
-    # uniques
-    others = [i for i in list_ if i.quality.lower() not in qualities]
-    return unusual, strange, vintage, genuine, haunted, others
+    def get_account_items_steamids(self, account):
+        r = self.c.execute('''select steamItemId from account where account=?''', [account])
+        rows = [i[0] for i in r.fetchall()]
+        return rows
 
-def generate_rows(list_, content, rowMarker):
-    rowHtml = '<tr class="%s-quality"><td><img src="%s"/></td><td>%s</td><td>%s</td><td class="count-col">%s</td></tr>\n%s'
-    qualities = get_qualities(list_)
-    for quality in qualities:
-        for i in quality:
-            if i.quality != 'Unique':
-                displayName = '%s %s' % (i.quality, i.name)
-            else:
-                displayName = i.name
-            row = rowHtml % (i.quality.lower(), i.image, i.material.capitalize(), displayName, i.get_nice_count(), rowMarker)
-            content = content.replace(rowMarker, row)
-    return content
+    def insert_to_item_and_account(self, item, account):
+        self.c.execute('''insert into item values (null, ?, ?, ?, ?, ?)''', (item.quality, item.name, item.material, item.classes, item.image))
+        last = self.c.lastrowid
+        self.c.execute('''insert into account values (null, ?, ?, ?)''', (account, last, item.id))
+        self.conn.commit()
 
-def sort_and_generate_rows(title, list_, content):
-    sectionHeaderHtml = '<tr><td class="table-section-header" colspan="4">%s</td></tr>\n%s'
-    rowMarker = '<!--APPENDROWHERE-->'
+    def insert_to_account(self, item, account):
+        r = self.c.execute('''select id from item where quality=? and name=?''', (item.quality, item.name))
+        itemid = r.fetchone()[0]
+        self.c.execute('''insert into account 
+            values (null, ?, ?, ?)''', (account, itemid, item.id))
+        self.conn.commit()
 
-    header = sectionHeaderHtml % (title, rowMarker)
-    content = content.replace(rowMarker, header)
+    def remove_from_account_by_steamitemid(self, itemid):
+        self.c.execute('''delete from account where steamItemId=?''', [itemid])
+        self.conn.commit()
 
-    # sorting according to material
-    types = ['hat', 'misc', 'weapon', 'crate', 'metal', 'tool']
-    hat = [i for i in list_ if i.material.lower() == types[0]]
-    misc = [i for i in list_ if i.material.lower() == types[1]]
-    weapon = [i for i in list_ if i.material.lower() == types[2]]
-    crate = [i for i in list_ if i.material.lower() == types[3]]
-    metal = [i for i in list_ if i.material.lower() == types[4]]
-    tool = [i for i in list_ if i.material.lower() == types[5]]
-    others = [i for i in list_ if i.material.lower() not in types]
-    # generating according to quality
-    content = generate_rows(metal, content, rowMarker)
-    content = generate_rows(crate, content, rowMarker)
-    content = generate_rows(tool, content, rowMarker)
-    content = generate_rows(hat, content, rowMarker)
-    content = generate_rows(misc, content, rowMarker)
-    content = generate_rows(weapon, content, rowMarker)
-    content = generate_rows(others, content, rowMarker)
-    return content
+    def remove_from_item_by_id(self, itemid):
+        self.c.execute('''delete from item where id=?''', [itemid])
+        self.conn.commit()
+
+    def item_exists(self, item):
+        exists = False
+        results = self.c.execute('''select i.* from item i, account a 
+                where i.quality=? and i.name=?''', (item.quality, item.name))
+        if self.c.fetchall() != []:
+            exists = True
+        return exists
+
+    def get_accounts_by_itemid(self, itemid):
+        r = self.c.execute('''select account, count(account) from account where itemid=? group by account''', [itemid])
+        return r.fetchall()
+
+    # gets the item and also appends the accounts that have the item, along with the count
+    def get_item_by_type(self, type):
+        r = self.c.execute('''select * from item where type=?''', [type])
+        tmp = r.fetchall()
+        results2 = []
+
+        # sorting
+        results = []
+        for q in ['Unusual', 'Strange', 'Genuine', 'Vintage', 'Haunted', 
+                  'Community', 'Self-Made', 'Valve', 'Unique', 'Normal']:
+            tmp2 = [i for i in tmp if i[1] == q]
+            results = results + tmp2
+            
+        for i in results:
+            accounts = self.get_accounts_by_itemid(i[0])
+            accs = []
+            for a in accounts:
+                tmp = '%s: %s' % (a[0], a[1])
+                accs.append(tmp)
+            i = i + (accs,)
+            results2.append(i)
+        return results2
+
+    def close(self):
+        self.conn.close()
+
+def generate_html():
+    itemdb = os.path.join(os.path.dirname(sys.argv[0]), 'items.db')
+    db = DB(itemdb)
+    template = os.path.join(os.path.dirname(sys.argv[0]), 'makotemplate.txt')
+    fullpath = os.path.join(options.htmldir, options.filename)
+
+    miscs = db.get_item_by_type('misc')
+    hats = db.get_item_by_type('hat')
+    weapons = db.get_item_by_type('weapon')
+    crates = db.get_item_by_type('crate')
+    tools = db.get_item_by_type('tool')
+    metal = db.get_item_by_type('metal')
+    
+    html = Template(filename=template).render(miscs=miscs, hats=hats, weapons=weapons, crates=crates, tools=tools, metal=metal)
+    with codecs.open(fullpath, 'w', 'utf-8') as f:
+        f.write(html)
 
 if __name__ == '__main__':
     options = Options()
-    steam.base.set_api_key(options.apiKey);
+    steam.base.set_api_key(options.apiKey)
+    itemdb = os.path.join(os.path.dirname(sys.argv[0]), 'items.db')
 
-    template = os.path.join(os.path.dirname(sys.argv[0]), 'template.html')
-    fullpath = os.path.join(options.htmldir, options.filename)
-
+    db = DB(itemdb)
+    db.initialize_db()
+    db.close()
     
-
-
+    generate_html()
+    
     while True:
-        try:
-            tools = []
-            crates = []
-            scout = []
-            soldier = []
-            pyro = []
-            demo = []
-            heavy = []
-            engi = []
-            medic = []
-            sniper = []
-            spy = []
-            allClass = []
-            with codecs.open(fullpath, 'w', 'utf-8') as f:
-                content = ''
-                with open(template) as main:
-                    content = main.read()
-
-                for steamId in options.accounts:
-                    try:
-                        backpack = steam.tf2.backpack(steamId)
-                        for i in backpack:
-                            Item(i, steamId)
-                    except:
-                        pass
-
-                
-                ############################
-                # Begin table population
-
-                # crates
-                content = sort_and_generate_rows('Crates', crates, content)
-                # tools
-                content = sort_and_generate_rows('Tools', tools, content)
-
-                # all classes
-                content = sort_and_generate_rows('All Classes', allClass, content)
-                
-                # scout
-                content = sort_and_generate_rows('Scout', scout, content)
-
-                # Soldier
-                content = sort_and_generate_rows('Soldier', soldier, content)
-
-                # Pyro
-                content = sort_and_generate_rows('Pyro', pyro, content)
-
-                # Demo
-                content = sort_and_generate_rows('Demoman', demo, content)
-
-                # Heavy
-                content = sort_and_generate_rows('Heavy', heavy, content)
-                
-                # Engi
-                content = sort_and_generate_rows('Engineer', engi, content)
-
-                # Medic
-                content = sort_and_generate_rows('Medic', medic, content)
-
-                # Sniper
-                content = sort_and_generate_rows('Sniper', sniper, content)
-
-                # Spy
-                content = sort_and_generate_rows('Spy', spy, content)
-
-                # End table population
-                ###########################
-                
-                f.write(content)
-            print 'Generated.'
-        except:
-            pass
+        for steamId in options.accounts:
+            try:
+                backpack = steam.tf2.backpack(steamId)
+                print 'bp query done: ', steamId
+                Backpack(backpack, steamId)
+                print 'loop done for: ', steamId
+            except Exception as e:
+                print 'Error getting backpack:', e
+        generate_html()
+        print 'HTML generated.'
         time.sleep(60*options.pollMinutes)
-
